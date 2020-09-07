@@ -18,7 +18,7 @@ nce_linear = IndexLinear(
 # 这里 input 假装是经过了 embedding之后的
 input = torch.Tensor(200, 100)  # [batch, emb_dim]
 # target中这里是ones， 但是我们的task中应该是 对应的正确的token的id
-target = torch.ones(200, 1).long()  # [batch, emb_dim]
+target = torch.ones(200, 1).long()  # [batch, 1]
 # training mode
 loss = nce_linear(target, input).mean()
 print(loss.item())
