@@ -3,7 +3,7 @@
 import torch
 from nce import IndexLinear
 
-class_freq = [1, 2, 3, 4, 5, 6, 7]  # an unigram class probability
+class_freq = [0, 2, 2, 3, 4, 5, 6]  # an unigram class probability
 freq_count = torch.FloatTensor(class_freq)
 print("total counts for all tokens:", freq_count.sum())
 noise = freq_count / freq_count.sum()

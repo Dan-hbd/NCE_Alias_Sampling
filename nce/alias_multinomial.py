@@ -73,11 +73,11 @@ class AliasMultinomial(torch.nn.Module):
         """
         max_value = self.alias.size(0)   # max_value应该是 V 吧
         # size: 负样本的个数，每一个元算的value是0到V-1
-        kk = self.alias.new(*size).random_(0, max_value).long().view(-1)
-        prob = self.prob[kk]  # 抽取kk[i]到这个token的概率
-        alias = self.alias[kk]  # 如果不取值 kk[i]， 则取alias[i] 这个token
+        kk = self.alias.new(*size).random_(0, max_value).long().view(-1)  # *size (bsz, 1, noise_num)
+        prob = self.prob[kk]  # kk是token的index, prob[kk]取到这个token的概率，反应了noise distribution
+        alias = self.alias[kk]
         # b is whether a random number is smaller than prob, 小于输出1
-        b = torch.bernoulli(prob).long()  # 如果随机数小于prob， 则取kk[i]
+        b = torch.bernoulli(prob).long()  # 如果随机数小于prob， 则取该列本身对应的token，否也取填补到这列的token
         oq = kk.mul(b)
         oj = alias.mul(1 - b)  # 随机数大于prob， b为0， 1-b为1，取alias[i]
 

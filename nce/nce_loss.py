@@ -54,10 +54,10 @@ class NCELoss(nn.Module):
 
     def __init__(self,
                  noise,
-                 noise_ratio=8,  # real data samples
+                 noise_ratio=4,  # real data samples
                  norm_term='auto',
                  reduction='elementwise_mean',
-                 per_word=False,
+                 per_word=True,
                  loss_type='nce',
                  ):
         super(NCELoss, self).__init__()
@@ -66,7 +66,7 @@ class NCELoss(nn.Module):
         print(noise.sum())
         probs = noise / noise.sum()
         probs = probs.clamp(min=BACKOFF_PROB)
-        renormed_probs = probs / probs.sum()
+        renormed_probs = probs / probs.sum()  # 不会出现概率为0
 
         # If you have parameters in your model, which should be saved and restored in the state_dict,
         # but not trained by the optimizer, 参数不需要训练， 对比Parameter
@@ -83,6 +83,8 @@ class NCELoss(nn.Module):
             self.norm_term = norm_term
         self.reduction = reduction
         self.per_word = per_word
+
+        # 不需要在之前额外进行sigmoid 运算
         self.bce_with_logits = nn.BCEWithLogitsLoss(reduction='none')
         self.ce = nn.CrossEntropyLoss(reduction='none')
         self.loss_type = loss_type
@@ -99,14 +101,14 @@ class NCELoss(nn.Module):
         max_len = target.size(1)  # 1， 只有一个正确答案
         if self.loss_type != 'full':
 
-            noise_samples = self.get_noise(batch, max_len)  # 获取负样本
+            noise_samples = self.get_noise(batch, max_len)  # 获取负样本 (bsz, 1, noise_samples)，每个word可以有相同或不同的noise samples
 
-            # B,N,Nr
+            # B,N,Nr 概率分布， 和词库中这个token出现的频率有关
             logit_noise_in_noise = self.logprob_noise[noise_samples.data.view(-1)].view_as(noise_samples)
             logit_target_in_noise = self.logprob_noise[target.data.view(-1)].view_as(target)
 
             # (B,N), (B,N,Nr)
-            logit_target_in_model, logit_noise_in_model = self._get_logit(target, noise_samples, input,*args, **kwargs)
+            logit_target_in_model, logit_noise_in_model = self._get_logit(target, noise_samples, input, *args, **kwargs)
 
             if self.loss_type == 'nce':
                 if self.training:
@@ -156,7 +158,7 @@ class NCELoss(nn.Module):
         """Generate noise samples from noise distribution"""
         noise_size = (batch_size, max_len, self.noise_ratio)  # [batch, len, noise_num]
         if self.per_word:
-            noise_samples = self.alias.draw(*noise_size)
+            noise_samples = self.alias.draw(*noise_size)  # (bsz, 1, noise_num) 每一个word 对应的noise samples都不一样
         else:
             # 这里也可以看出， bathc中每一个样本选取的noise是一样的， draw函数返回的是针对一个样本的负样本，然后expand到batch
             noise_samples = self.alias.draw(1, 1, self.noise_ratio).expand(*noise_size)
@@ -164,7 +166,7 @@ class NCELoss(nn.Module):
         noise_samples = noise_samples.contiguous()
         return noise_samples
 
-    def _get_logit(self, target_idx, noise_idx, *args, **kwargs):
+    def _get_logit(self, target_idx, noise_idx, input, *args, **kwargs):
         """Get the logits of NCE estimated probability for target and noise
 
         Both NCE and sampled softmax Loss are unchanged when the probabilities are scaled

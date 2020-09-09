@@ -77,13 +77,13 @@ class IndexLinear(NCELoss):
         """
 
         # the size will be used to pack the output of indexlinear
-        original_size = target_idx.size()
+        original_size = target_idx.size()  # (bsz, 1)
 
         # flatten the following matrix
-        input = input.contiguous().view(-1, 1, input.size(-1))  # N,1,E
-        target_idx = target_idx.view(-1).unsqueeze(-1)  # N,1
-        noise_idx = noise_idx.view(-1, noise_idx.size(-1))  # N,Nr
-        indices = torch.cat([target_idx, noise_idx], dim=-1)
+        input = input.contiguous().view(-1, 1, input.size(-1))  # (bsz, emb_size) to (bsz, 1, emb_size)
+        target_idx = target_idx.view(-1).unsqueeze(-1)  # (bsz, 1)
+        noise_idx = noise_idx.view(-1, noise_idx.size(-1))  # (bsz, 1, noise_num) to (bsz,  noise_num)
+        indices = torch.cat([target_idx, noise_idx], dim=-1)  # (bsz,  noise_num+1)
 
         # the pytorch's [] operator can't BP correctly with redundant indices
         # before version 0.2.0
@@ -93,11 +93,11 @@ class IndexLinear(NCELoss):
         # 20it/s vs. 14 it/s
         # target_batch = self.emb(indices)
         # bias = self.bias(indices).squeeze(2)
-        target_batch = self.emb.weight.index_select(0, indices.view(-1)).view(*indices.size(), -1)
+        target_batch = self.emb.weight.index_select(0, indices.view(-1)).view(*indices.size(), -1)  # (bsz,  noise_num+1, emb_size)
         bias = self.bias.weight.index_select(0, indices.view(-1)).view_as(indices)
         # the element-wise multiplication is automatically broadcasted
-        logits = torch.sum(input * target_batch, dim=2) + bias
-        logits = logits.view(*original_size, -1)
+        logits = torch.sum(input * target_batch, dim=2) + bias  # (bsz,  noise_num+1, emb_size)  to (bsz,  noise_num+1)
+        logits = logits.view(*original_size, -1)  # (bsz,  noise_num+1) to (bsz, 1, noise_num+1)
 
         target_score, noise_score = logits[:, :, 0], logits[:, :, 1:]
         return target_score, noise_score
